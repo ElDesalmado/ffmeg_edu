@@ -22,6 +22,9 @@ extern "C" {
 #include <string.h>
 #include <inttypes.h>
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb/stb_image_write.h>
+
 // print out the steps and errors
 static void logging(const char *fmt, ...);
 
@@ -29,18 +32,20 @@ static void logging(const char *fmt, ...);
 static void save_gray_frame(unsigned char *buf, int wrap, int xsize, int ysize, char *filename);
 //////////////////////////////
 
-
 int decode_packet(AVPacket *pPacket, AVCodecContext *pCodecContext, AVFrame *pFrame);
 
-void save_gray_frame(const uint8_t *buf, size_t wrap, size_t xSize, size_t ySize, const std::string &filename);
+void save_frame(const uint8_t *buf, size_t wrap, size_t xSize, size_t ySize, const std::string &filename);
+
+// TODO: print codec and info?
 
 int main(int argc, char **argv)
 {
-    if (argc < 2)
-    {
-        printf("You need to specify a media file.\n");
-        return -1;
-    }
+    // default sample
+    std::string videoInput = "file:small_bunny_1080p_60fps.mp4";
+    if (argc == 2)
+        videoInput = argv[1];
+
+    std::cout << "Streaming from: " << videoInput << std::endl;
 
     AVFormatContext *pFormatContext = avformat_alloc_context();
 
@@ -50,9 +55,7 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    const char *videoSample = "file:small_bunny_1080p_60fps.mp4";
-
-    int error = avformat_open_input(&pFormatContext, videoSample, nullptr, nullptr);
+    int error = avformat_open_input(&pFormatContext, videoInput.c_str(), nullptr, nullptr);
 
     if (error)
     {
@@ -135,7 +138,6 @@ int main(int argc, char **argv)
     {
         error = av_read_frame(pFormatContext, pPacket);
 
-        // WTF, how is it even possible?
         if (pPacket->stream_index != (*found)->index)
         {
             std::cout << "Unexpected packet stream index: " <<
@@ -202,27 +204,32 @@ int decode_packet(AVPacket *pPacket, AVCodecContext *pCodecContext, AVFrame *pFr
         std::string fileFrameName{};
         std::stringstream ss{};
 
-        ss << "frame-" << pCodecContext->frame_number << ".pgm";
+        ss << "frame-" << pCodecContext->frame_number << ".jpg";
         ss >> fileFrameName;
 
-        save_gray_frame(pFrame->data[0],
-                        pFrame->linesize[0],
-                        pFrame->width, pFrame->height,
-                        fileFrameName);
+        save_frame(pFrame->data[0],
+                   pFrame->linesize[0],
+                   pFrame->width, pFrame->height,
+                   fileFrameName);
     }
 
     return 0;
 }
 
-void save_gray_frame(const uint8_t *buf, size_t wrap, size_t xSize, size_t ySize, const std::string &filename)
+void save_frame(const uint8_t *buf, size_t wrap, size_t xSize, size_t ySize, const std::string &filename)
 {
-    std::fstream fileFrame{filename, std::ios::out};
-    if (!fileFrame)
-        std::cerr << "Failed to create file frame" << std::endl;
-    fileFrame << "P5\n" << xSize << ' ' << ySize << "\n255\n" << std::endl;
+    int error = stbi_write_jpg(filename.c_str(), xSize, ySize, 2, buf, 100);
+    if (error)
+        std::cerr << "Failed to save frame to jpg" << std::endl;
 
-    for (size_t i = 0; i != ySize; ++i)
-        fileFrame.write(reinterpret_cast<const char *>(std::next(buf, i * wrap)), xSize);
+//
+//    std::fstream fileFrame{filename, std::ios::out};
+//    if (!fileFrame)
+//        std::cerr << "Failed to create file frame" << std::endl;
+//    fileFrame << "P5\n" << xSize << ' ' << ySize << "\n255\n" << std::endl;
+//
+//    for (size_t i = 0; i != ySize; ++i)
+//        fileFrame.write(reinterpret_cast<const char *>(std::next(buf, i * wrap)), xSize);
 }
 
 static void logging(const char *fmt, ...)

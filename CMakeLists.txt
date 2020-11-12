@@ -20,6 +20,11 @@ target_link_libraries(Chapter0
         FFMPEG::avdevice
         )
 
+target_include_directories(Chapter0
+        PUBLIC
+        3rdparty/stb/include
+        )
+
 # this MUST work
 add_executable(hello_world_0 hello_world_0.c)
 target_link_libraries(hello_world_0
